@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 
 app = FastAPI(title="NoteMind")
@@ -63,7 +66,7 @@ async def upload_attachment(note_id: int, file: UploadFile = File(...),
 
 
 from pydantic import BaseModel
-
+from app import rag
 class NoteIn(BaseModel):
     title: str
     body: str
@@ -74,4 +77,15 @@ def create_note(body: NoteIn, user_id: int = Depends(auth.get_current_user_id), 
     db.add(note)
     db.commit()
     db.refresh(note)
+    rag.index_note(db, note.id, body.body)     # chunk + embed immediately on create
+
     return {"id": note.id}
+
+
+class AskIn(BaseModel):
+    question:str
+
+@app.post("/ask")
+def ask_notes(body:AskIn,user_id:int=Depends(auth.get_current_user_id),db:Session=Depends(get_db)):
+    return rag.ask(db, body.question, user_id)
+
